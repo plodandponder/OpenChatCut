@@ -119,6 +119,9 @@ async function tick(): Promise<void> { await new Promise((r) => setTimeout(r, 0)
   assert.ok(prefs.length >= 2, 'main and transcript windows define webPreferences');
   for (const block of prefs) {
     assert.match(block, /backgroundThrottling:\s*false/, 'every editor webPreferences keeps the bridge heartbeat running in the background');
+    assert.match(block, /contextIsolation:\s*true/, 'every editor webPreferences enforces contextIsolation');
+    assert.match(block, /nodeIntegration:\s*false/, 'every editor webPreferences disables nodeIntegration');
+    assert.match(block, /sandbox:\s*true/, 'every editor webPreferences enables OS renderer sandboxing');
   }
   assert.match(main, /if \(!hasSingleInstanceLock\)\s*\{\s*app\.quit\(\);\s*\}\s*else\s*\{\s*applyWindowsGpuCrashFallback\(app\);/,
     'GPU fallback runs only after profile selection and successful single-instance acquisition');

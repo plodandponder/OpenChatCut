@@ -247,6 +247,7 @@ function registerDesktopHandlers(trustedOrigin: string): void {
         preload: PRELOAD_PATH,
         contextIsolation: true,
         nodeIntegration: false,
+        sandbox: true,
         spellcheck: false,
         // The editor bridge heartbeat is a timer-driven long poll; without
         // this, Electron throttles background windows and the MCP bridge
@@ -420,6 +421,7 @@ async function boot(): Promise<void> {
       preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
       spellcheck: false,
       // Same heartbeat reasoning as the transcript window above.
       backgroundThrottling: false,

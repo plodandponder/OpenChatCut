@@ -54,6 +54,7 @@ const rejects: Array<[string, unknown]> = [
   ['zoom magnification 越界', { ...goodPack, items: [{ type: 'zoom', id: 'x', name: 'x', envelope: [0, 1], magnification: 99 }] }],
   ['mg code 缺失', { ...goodPack, items: [{ type: 'mg-template', id: 'x', name: 'x', code: '' }] }],
   ['thumb 非法 scheme', { ...goodPack, items: [{ type: 'zoom', id: 'x', name: 'x', envelope: [0, 1], thumb: 'javascript:alert(1)' }] }],
+  ['thumb 不安全 http scheme', { ...goodPack, items: [{ type: 'zoom', id: 'x', name: 'x', envelope: [0, 1], thumb: 'http://insecure.example/t.jpg' }] }],
   ['thumb 超限', { ...goodPack, items: [{ type: 'zoom', id: 'x', name: 'x', envelope: [0, 1], thumb: `data:image/jpeg;base64,${'A'.repeat(PLUGIN_LIMITS.maxThumbBytes + 64)}` }] }],
 ];
 {

@@ -7,6 +7,7 @@ import { serverPlugins } from '../server/plugins/index.ts';
 import { seedKeystore, getKey } from '../server/keystore.ts';
 import { productAssetsPlugin } from '../server/product-assets.ts';
 import { runtimeProfile } from '../server/runtime-profile.ts';
+import { authorizeAssemblyAiProxy } from '../desktop/embedded-server.ts';
 
 const appPackage = JSON.parse(readFileSync('package.json', 'utf8')) as { version?: unknown };
 if (typeof appPackage.version !== 'string') throw new Error('package.json is missing a valid version');
@@ -69,6 +70,8 @@ function serveOrtWasmLoader(): Plugin {
     apply: 'serve',
     enforce: 'pre',
     configureServer(server) {
+      // Authorize /assemblyai requests in dev mode just like the production embedded server
+      server.middlewares.use('/assemblyai', authorizeAssemblyAiProxy);
       server.middlewares.use((req, res, next) => {
         const pathname = (req.url ?? '').split('?')[0];
         if (!/^\/models\/silero-vad\/.+\.mjs$/.test(pathname)) { next(); return; }
@@ -151,6 +154,7 @@ export default defineConfig(({ mode }) => {
     publicDir: 'public',
     plugins: [serveOrtWasmLoader(), react(), productAssetsPlugin(), excludeUserMediaFromBuild(), ...serverPlugins()],
     server: {
+      host: '127.0.0.1',
       port: 5199,
       strictPort: true,
       // Pre-transform the editor entry graph at startup so the first tab

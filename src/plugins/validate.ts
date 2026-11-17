@@ -77,7 +77,7 @@ function checkFrag(
   }
 }
 
-// data:image/* inline (limited length) or origin path/https; other schemes (javascript:, etc.) are rejected
+// data:image/* inline (limited length) or origin path/https; other schemes (javascript:, http:, etc.) are rejected
 function checkThumb(errors: string[], at: string, v: unknown): void {
   if (v === undefined) return;
   if (!isStr(v) || !v.trim()) {
@@ -91,10 +91,9 @@ function checkThumb(errors: string[], at: string, v: unknown): void {
   }
   if (
     !v.startsWith("/") &&
-    !v.startsWith("https://") &&
-    !v.startsWith("http://")
+    !v.startsWith("https://")
   ) {
-    errors.push(`${at}: thumb 只允许 data:image/* 或 URL(/… | https://…)`);
+    errors.push(`${at}: thumb 只允许 data:image/* 或安全 URL(/… | https://…)`);
   }
 }
 

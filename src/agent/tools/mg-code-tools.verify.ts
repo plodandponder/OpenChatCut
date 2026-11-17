@@ -1,7 +1,9 @@
 // Runnable: `npx tsx src/agent/mg-code-tools.check.ts`
 import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
 import { makeDraft } from '../../editor/store';
 import { docFromTimeline } from '../../persist/projectStore';
+import { prepareTemplate } from '../../template-host';
 import type { AgentContext } from '../context';
 import { execMgCodeTool, MG_CODE_TOOL_NAMES } from './mg-code-tools';
 
@@ -45,5 +47,30 @@ const asset = draft.getDoc().assets.find((a) => a.id === ok.assetId);
 assert.ok(asset);
 assert.strictEqual(asset!.kind, 'motion-graphic');
 assert.strictEqual(asset!.props?.title, 'Hello');
+
+// Verify AST & prototype-chain sandbox escape hardening
+for (const escapeCode of [
+  'const X = ({item}) => { const f = ({})["con" + "structor"]; return null; };',
+  'const X = ({item}) => { const f = ({})["constructor"]; return null; };',
+  'const X = ({item}) => { const f = Object.getPrototypeOf({}); return null; };',
+  'const X = ({item}) => { const f = Reflect.get({}, "toString"); return null; };',
+  'const X = ({item}) => { const f = ({}).__proto__; return null; };',
+  'const X = ({item}) => { return <div>{this}</div>; };',
+]) {
+  const escaped = await execMgCodeTool('create_motion_graphic_from_code', {
+    code: escapeCode,
+    name: 'Escape Attempt',
+    width: 100,
+    height: 100,
+  }, ctx) as { error?: string };
+  assert.ok(escaped.error, `Expected sandbox rejection for: ${escapeCode}`);
+}
+
+const builtinTemplates = JSON.parse(
+  readFileSync(new URL('../../../assets/templates/openchatcut-templates.json', import.meta.url), 'utf8'),
+) as Array<{ id: string; name: string; code: string }>;
+for (const tmpl of builtinTemplates) {
+  await prepareTemplate(tmpl.code);
+}
 
 console.log('mg-code-tools.check: ok');

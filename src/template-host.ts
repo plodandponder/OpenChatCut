@@ -100,9 +100,17 @@ const FORBIDDEN: [RegExp, string][] = [
   [/\barguments\b/, 'arguments'],
   [/\bnew\s+Function\b/, 'new Function'],
   [/\.\s*constructor\b/, '.constructor (escape vector)'],
+  [/\bconstructor\b/, 'constructor identifier (prototype-chain escape vector)'],
+  [/\b__proto__\b/, '__proto__ (prototype-chain escape vector)'],
+  [/\bprototype\b/, 'prototype access'],
+  [/\bObject\s*\.\s*(getPrototypeOf|setPrototypeOf|defineProperty|defineProperties|assign)\b/, 'Object reflection'],
+  [/\bReflect\b/, 'Reflect API'],
+  [/\bProxy\b/, 'Proxy API'],
+  [/\bSymbol\b/, 'Symbol API'],
   [/\bwindow\s*[.[]/, 'window access'],
   [/\bdocument\s*[.[]/, 'document access'],
   [/\bglobalThis\b/, 'globalThis'],
+  [/\bopenChatCutDesktop\b/, 'desktop preload bridge access'],
   [/\bfetch\s*\(/, 'fetch()'],
   [/\bnew\s+(XMLHttpRequest|WebSocket|EventSource|Worker)\b/, 'network/worker'],
   [/\b(localStorage|sessionStorage|indexedDB)\s*[.[]/, 'storage access'],
@@ -114,6 +122,19 @@ const FORBIDDEN: [RegExp, string][] = [
   [/\bdebugger\b/, 'debugger'],
 ];
 
+const AST_FORBIDDEN_IDENTIFIERS = new Set([
+  'eval', 'arguments', 'Function', 'constructor', '__proto__', 'prototype',
+  'Reflect', 'Proxy', 'globalThis', 'window', 'document',
+  'localStorage', 'sessionStorage', 'indexedDB', 'fetch', 'XMLHttpRequest',
+  'WebSocket', 'EventSource', 'Worker', 'SharedWorker', 'importScripts',
+  'postMessage', 'process', 'require', 'module', 'exports', 'openChatCutDesktop',
+]);
+
+const AST_FORBIDDEN_STRING_PROPS = new Set([
+  'constructor', '__proto__', 'prototype', 'mainModule', 'binding', 'dlopen',
+  'openChatCutDesktop', 'cookie', 'localStorage', 'sessionStorage', 'indexedDB',
+]);
+
 // strip comments so prose like "video window." doesn't trip the blocklist.
 // (only used for the security scan — the original code is what actually runs.)
 function stripComments(code: string): string {
@@ -124,6 +145,55 @@ export function validateTemplate(code: string): void {
   const scan = stripComments(code);
   for (const [re, reason] of FORBIDDEN) {
     if (re.test(scan)) throw new Error(`sandbox 拒绝：检测到「${reason}」`);
+  }
+}
+
+function assertSafeAstNode(node: unknown, parent?: Record<string, unknown>, parentKey?: string): void {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const child of node) assertSafeAstNode(child, parent, parentKey);
+    return;
+  }
+  const n = node as Record<string, unknown>;
+  const type = n.type;
+  if (type === 'ImportDeclaration' || type === 'ImportExpression' || type === 'ExportNamedDeclaration' || type === 'ExportDefaultDeclaration' || type === 'ExportAllDeclaration' || type === 'WithStatement' || type === 'DebuggerStatement') {
+    throw new Error(`sandbox 拒绝：AST 检测到禁用语法「${String(type)}」`);
+  }
+  if (type === 'ThisExpression' || type === 'Super' || type === 'MetaProperty') {
+    throw new Error(`sandbox 拒绝：AST 检测到禁用上下文访问「${String(type)}」`);
+  }
+  if (type === 'Identifier' && typeof n.name === 'string' && AST_FORBIDDEN_IDENTIFIERS.has(n.name)) {
+    const isNonComputedObjectKey = (parent?.type === 'ObjectProperty' || parent?.type === 'ObjectMethod')
+      && parentKey === 'key'
+      && parent.computed === false;
+    if (!isNonComputedObjectKey) {
+      throw new Error(`sandbox 拒绝：AST 检测到禁用标识符「${n.name}」`);
+    }
+  }
+  if ((type === 'StringLiteral' || type === 'Literal') && typeof n.value === 'string' && AST_FORBIDDEN_STRING_PROPS.has(n.value)) {
+    throw new Error(`sandbox 拒绝：AST 检测到禁用属性字面量「${n.value}」`);
+  }
+  if ((type === 'MemberExpression' || type === 'OptionalMemberExpression') && n.computed === true) {
+    const obj = n.object as Record<string, unknown> | undefined;
+    const prop = n.property as Record<string, unknown> | undefined;
+    const propType = prop?.type;
+    // Only allow computed access on `props` (`props[`val${i}`]`) or with numeric/simple-identifier array indices.
+    const isPropsLookup = obj?.type === 'Identifier' && obj.name === 'props';
+    if (!isPropsLookup && (propType === 'TemplateLiteral' || propType === 'SequenceExpression' || propType === 'AssignmentExpression')) {
+      throw new Error('sandbox 拒绝：AST 检测到动态属性访问');
+    }
+    if (!isPropsLookup && propType === 'BinaryExpression' && prop?.operator === '+' && (
+      (prop.left as Record<string, unknown>)?.type === 'StringLiteral'
+      || (prop.right as Record<string, unknown>)?.type === 'StringLiteral'
+      || (prop.left as Record<string, unknown>)?.type === 'TemplateLiteral'
+      || (prop.right as Record<string, unknown>)?.type === 'TemplateLiteral'
+    )) {
+      throw new Error('sandbox 拒绝：AST 检测到动态属性拼接访问');
+    }
+  }
+  for (const [key, value] of Object.entries(n)) {
+    if (key === 'loc' || key === 'start' || key === 'end' || key === 'extra' || key === 'leadingComments' || key === 'trailingComments' || key === 'innerComments') continue;
+    assertSafeAstNode(value, n, key);
   }
 }
 
@@ -155,7 +225,9 @@ async function compileUncached(code: string): Promise<MgComponent> {
   const transformed = Babel.transform(code, {
     presets: [['react', { runtime: 'classic' }]],
     filename: 'template.jsx',
+    ast: true,
   });
+  if (transformed?.ast) assertSafeAstNode(transformed.ast);
   const output = transformed?.code;
   if (!output) throw new Error('template: babel 无输出');
   return evaluateTemplate(output, name);
