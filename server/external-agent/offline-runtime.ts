@@ -71,6 +71,7 @@ export class OfflineExternalEditRuntime {
   private ownership: ProjectEditOwnershipClaim;
   private disposed = false;
   private disposal: Promise<void> | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
 
   private constructor(
     snapshot: OfflineStoredProject,
@@ -88,6 +89,16 @@ export class OfflineExternalEditRuntime {
     this.browserConnected = dependencies.isBrowserConnected ?? isProjectConnected;
     this.executeTool = dependencies.executeTool ?? executeOfflineTool;
     this.catalogs = catalogs;
+    this.heartbeatTimer = setInterval(() => {
+      if (this.disposed) return;
+      void this.persistence.renewOwnership(this.ownership, this.expectedRevision).then((renewed) => {
+        if (renewed.status === 'renewed') {
+          this.ownership = renewed.claim;
+          this.baseDoc = renewed.doc;
+        }
+      }).catch(() => {});
+    }, 25_000);
+    this.heartbeatTimer.unref?.();
   }
 
   static async create(
@@ -157,6 +168,10 @@ export class OfflineExternalEditRuntime {
   dispose(): Promise<void> {
     if (this.disposal) return this.disposal;
     this.disposed = true;
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     for (const run of this.runs.values()) run.dispose();
     this.failActiveSessions('cancelled');
     this.disposal = this.persistence.releaseOwnership(this.ownership).catch((error: unknown) => {
