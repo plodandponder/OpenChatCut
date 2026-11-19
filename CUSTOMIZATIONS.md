@@ -30,6 +30,7 @@ npx electron-builder --config config/electron-builder.config.mjs --win dir --x64
 | Change | Commit | Files | Details |
 | :--- | :--- | :--- | :--- |
 | **Offline MCP / CLI session lease heartbeat** | `cb82f5d2` | [`server/external-agent/offline-runtime.ts`](server/external-agent/offline-runtime.ts) | Added a 25-second `setInterval` heartbeat that renews the 90-second project ownership lease during long offline operations (such as bulk importing/normalizing 60+ video clips). Cleared cleanly on `dispose()`. |
+| **Prevent preview playback starvation on large timelines** | — | [`src/media/clipPreview.ts`](src/media/clipPreview.ts)<br>[`src/media/MediaPoolCard.tsx`](src/media/MediaPoolCard.tsx) | Added a 2-slot concurrency limit on `/api/waveform` + `/api/filmstrip` requests and `loading="lazy"` on Media Pool poster images so opening 60+ clip projects never saturates Chromium's 6-connection HTTP/1.1 pool and starves live `<Player>` playback. |
 
 ---
 

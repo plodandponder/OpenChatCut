@@ -88,7 +88,7 @@ function ReleasableVideo({ src, poster, onError, onReady }: ReleasableVideoProps
 function VideoPoster({ src, name }: { src?: string; name: string }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) return <Icon name="video" size={42} strokeWidth={2.2} />;
-  return <img src={src} alt={name} draggable={false} onError={() => setFailed(true)} />;
+  return <img src={src} alt={name} draggable={false} loading="lazy" decoding="async" onError={() => setFailed(true)} />;
 }
 
 function AssetPreview({ asset, fps, active, onLoadError, onLoadSuccess }: AssetPreviewProps) {

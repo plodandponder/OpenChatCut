@@ -36,7 +36,36 @@ type Entry = {
 // entries and evict the oldest; anything still rendered (listeners > 0) is
 // never evicted, and an evicted entry simply refetches if it comes back.
 const MAX_IDLE_PREVIEW_ENTRIES = 40;
+const MAX_CONCURRENT_PREVIEW_LOADS = 2;
 const entries = new Map<string, Entry>();
+let activePreviewLoads = 0;
+const previewLoadQueue: Array<() => void> = [];
+
+async function withPreviewLoadSlot<T>(signal: AbortSignal, fn: () => Promise<T>): Promise<T> {
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+  if (activePreviewLoads >= MAX_CONCURRENT_PREVIEW_LOADS) {
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = () => {
+        const idx = previewLoadQueue.indexOf(start);
+        if (idx >= 0) previewLoadQueue.splice(idx, 1);
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      const start = () => {
+        signal.removeEventListener('abort', onAbort);
+        resolve();
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      previewLoadQueue.push(start);
+    });
+  }
+  activePreviewLoads++;
+  try {
+    return await fn();
+  } finally {
+    activePreviewLoads--;
+    previewLoadQueue.shift()?.();
+  }
+}
 
 /** Drop the oldest listener-less entries once the idle set exceeds the cap.
  * Map iteration is insertion-ordered, which is a good enough LRU proxy here. */
@@ -104,10 +133,10 @@ async function load(src: string, sourceRevision: string | undefined, wantStrip: 
     src,
     ...(sourceRevision ? { sourceRevision } : {}),
   }).toString();
-  const [wave, strip] = await Promise.all([
+  const [wave, strip] = await withPreviewLoadSlot(signal, () => Promise.all([
     fetchWaveform(query, signal),
     wantStrip ? fetchFilmstrip(query, signal) : Promise.resolve<StripResult>({ url: null }),
-  ]);
+  ]));
   if (signal.aborted) return;
   e.value = {
     peaks: wave.data?.peaks ?? [],
