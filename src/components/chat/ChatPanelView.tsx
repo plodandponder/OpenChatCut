@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { theme } from '../../theme';
+import { FEATURE_FLAGS } from '../../featureFlags';
 import { BrandMark, Icon, OpenChatCutWordmark } from '../icons';
 import { AgentChangeLogMenu } from './AgentChangeLogMenu';
 import { AgentRunInspector } from './AgentRunInspector';
@@ -260,7 +261,7 @@ function ExpandedPanel({ controller }: { controller: ChatPanelController }) {
       }}
       style={{ gridColumn: 1, gridRow: '2 / 5', display: 'flex', flexDirection: 'column', borderRight: `0.5px solid ${theme.border}`, background: theme.panel, minHeight: 0, minWidth: 0 }}>
       <ChatHeader controller={controller} />
-      <CapabilityBanner controller={controller} />
+      {FEATURE_FLAGS.showChatCapabilityGapBanner && <CapabilityBanner controller={controller} />}
       <MessageWorkspace controller={controller} />
       <ComposerSection controller={controller} />
     </aside>

@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from 'react';
 import type { ProjectMeta } from '../../persist/projectStoreCoordinators';
 import { theme } from '../../theme';
+import { FEATURE_FLAGS } from '../../featureFlags';
 import { useT } from '../../i18n/locale';
 import { DashboardHeaderLinks } from '../DashboardHeaderLinks';
 import { BrandMark, Icon, OpenChatCutWordmark } from '../icons';
@@ -179,7 +180,7 @@ export function DashboardContent({ props, model }: { props: DashboardProps; mode
   return (
     <main style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div style={{ maxWidth: 1120, margin: '0 auto', padding: '28px 24px 80px' }}>
-        {model.modelSnapshot.loaded && model.modelSnapshot.choices.length === 0 && <ModelSetupCard onOpen={() => model.setDialog('settings', true)} />}
+        {FEATURE_FLAGS.showDashboardModelSetupBanner && model.modelSnapshot.loaded && model.modelSnapshot.choices.length === 0 && <ModelSetupCard onOpen={() => model.setDialog('settings', true)} />}
         <ProjectToolbar projects={props.projects} model={model} />
         <ProjectGrid props={props} model={model} />
       </div>
